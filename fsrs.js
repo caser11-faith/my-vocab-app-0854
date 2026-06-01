@@ -1,6 +1,6 @@
 class FSRS {
     constructor() {
-        // FSRS 全局参数 (默认最优参数)
+        // FSRS 默认参数
         this.w = [0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01, 1.49, 0.14, 0.94, 2.18, 0.05, 0.34, 1.26, 0.29, 2.61];
         this.requestRetention = 0.9;
         this.maxInterval = 36500;
@@ -29,7 +29,7 @@ class FSRS {
     }
 
     nextInterval(stability) {
-        const interval = stability * (1 + this.w[17]) / this.requestRetention;
+        const interval = stability * (1 + this.w[16]) / this.requestRetention;
         return Math.min(Math.round(interval), this.maxInterval);
     }
 
@@ -59,7 +59,7 @@ class FSRS {
                 c.due = new Date(now.getTime() + base * 86400000);
                 if (r >= 3) {
                     c.state = 2;
-                    c.stability = this.w[7] * c.difficulty ** -this.w[8];
+                    c.stability = this.w[7] * Math.pow(c.difficulty, -this.w[8]);
                 }
             } else if (state === 2) {
                 // Review 复习卡片
@@ -73,7 +73,7 @@ class FSRS {
                     newStab = c.stability * this.w[11];
                 } else {
                     const factor = [0, this.w[12], this.w[13], this.w[14]][r - 1];
-                    newStab = c.stability * (1 + Math.exp(this.w[10]) * (11 - c.difficulty) * c.stability ** -this.w[9] * factor);
+                    newStab = c.stability * (1 + Math.exp(this.w[10]) * (11 - c.difficulty) * Math.pow(c.stability, -this.w[9]) * factor);
                 }
                 c.stability = newStab;
                 const ivl = this.nextInterval(c.stability);
