@@ -85,12 +85,12 @@
             tipDom.innerText = `剩余待复习：${reviewList.length}`;
         }
 
-        // 评分逻辑：调用 FSRS 更新卡片状态
+        // 【已修复】评分逻辑
         function rateCard(rating) {
             if (!currentWord) return;
             const now = new Date();
-            // FSRS 更新卡片
-            const [newCard] = fsrs.repeat(currentWord.card, now)[rating - 1];
+            const allResults = fsrs.repeat(currentWord.card, now);
+            const [newCard] = allResults[rating - 1];
             currentWord.card = newCard;
 
             // 回写到本地存储
@@ -99,11 +99,11 @@
             if (idx > -1) allData[idx] = currentWord;
             localStorage.setItem("fsrs_words_progress", JSON.stringify(allData));
 
-            // 继续下一个
+            // 切换下一个单词
             pickNextCard();
         }
 
-        // 启动
+        // 启动程序
         loadWords();
     </script>
 </body>
