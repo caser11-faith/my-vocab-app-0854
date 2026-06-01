@@ -1,161 +1,110 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>考研单词 FSRS 记忆神器</title>
-  <script src="https://cdn.jsdelivr.net/npm/ts-fsrs@4.0.0/dist/ts-fsrs.min.js"></script>
-  <script src="words.js"></script>
-  <style>
-    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; text-align: center; background: #f0f2f5; }
-    .card { border: 1px solid #ddd; border-radius: 16px; padding: 30px; margin: 20px 0; background: white; box-shadow: 0 4px 10px rgba(0,0,0,0.05); cursor: pointer; }
-    .word { font-size: 2.5em; margin-bottom: 10px; font-weight: bold; }
-    .definition { font-size: 1.4em; color: #555; display: none; margin: 15px 0; }
-    .show-def .definition { display: block; }
-    .buttons { margin-top: 25px; }
-    button { padding: 12px 22px; margin: 6px; font-size: 1em; border-radius: 10px; border: none; cursor: pointer; font-weight: bold; transition: transform 0.1s; }
-    button:active { transform: scale(0.96); }
-    .again { background: #ff6b6b; color: white; }
-    .hard { background: #ffa502; color: white; }
-    .good { background: #2ed573; color: white; }
-    .easy { background: #1e90ff; color: white; }
-    .stats { margin-top: 25px; color: #666; background: white; display: inline-block; padding: 8px 18px; border-radius: 20px; }
-    .empty-message { padding: 60px; color: #888; font-size: 1.2em; }
-    .tip { font-size: 0.9em; color: #999; margin-top: 15px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FSRS 单词背诵 MVP</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui, sans-serif; }
+        body { max-width: 600px; margin: 80px auto; padding: 0 20px; }
+        .card { border: 1px solid #eee; border-radius: 12px; padding: 40px 20px; text-align: center; box-shadow: 0 2px 8px #f0f0f0; }
+        .word { font-size: 28px; font-weight: bold; margin-bottom: 16px; }
+        .translation { font-size: 20px; color: #666; margin-bottom: 30px; min-height: 28px; }
+        .btn-group { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        button { padding: 10px 18px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+        .again { background: #ff4d4f; color: #fff; }
+        .hard { background: #ff7a45; color: #fff; }
+        .good { background: #52c41a; color: #fff; }
+        .easy { background: #1890ff; color: #fff; }
+        .tip { margin-top: 20px; color: #999; font-size: 13px; }
+    </style>
 </head>
 <body>
-  <h1>📚 考研单词 · FSRS 记忆调度</h1>
-  <div id="app"></div>
-
-  <script>
-    // ========== 1. 初始化 FSRS 算法 ==========
-    const fsrs = new FSRS.FSRS({ desired_retention: 0.9 });
-
-    // ========== 2. 本地存储相关 ==========
-    let cards = {};   // 存放所有单词的学习状态
-    const STORAGE_KEY = 'fsrs_vocab_cards';
-
-    function loadCards() {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const raw = JSON.parse(saved);
-        for (const id in raw) {
-          const item = raw[id];
-          item.fsrsState = FSRS.FSRSState.fromJSON(item.fsrsState);
-          item.due = new Date(item.due);
-          cards[id] = item;
-        }
-      }
-    }
-
-    function saveCards() {
-      const toSave = {};
-      for (const id in cards) {
-        const c = cards[id];
-        toSave[id] = {
-          fsrsState: c.fsrsState.toJSON(),
-          due: c.due.toISOString(),
-          card: c.card
-        };
-      }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-    }
-
-    // 如果还没有学习记录，就初始化所有单词（设为全新卡片）
-    function initAllCards() {
-      WORDS.forEach(w => {
-        if (!cards[w.id]) {
-          const now = new Date();
-          const newCard = FSRS.Card.new();
-          const scheduling = fsrs.schedule(newCard, now, FSRS.Rating.Good);
-          cards[w.id] = {
-            card: scheduling.card,
-            fsrsState: scheduling.state,
-            due: scheduling.due
-          };
-        }
-      });
-      saveCards();
-    }
-
-    // ========== 3. 获取今天需要复习的单词 ==========
-    function getDueCards() {
-      const now = new Date();
-      const dueIds = [];
-      for (const id in cards) {
-        if (cards[id].due <= now) {
-          dueIds.push(id);
-        }
-      }
-      return dueIds;
-    }
-
-    // ========== 4. 评分处理 ==========
-    function rateCard(wordId, rating) {
-      const now = new Date();
-      const entry = cards[wordId];
-      const scheduling = fsrs.schedule(entry.card, now, rating);
-      entry.card = scheduling.card;
-      entry.fsrsState = scheduling.state;
-      entry.due = scheduling.due;
-      saveCards();
-    }
-
-    // ========== 5. 界面渲染 ==========
-    const app = document.getElementById('app');
-    let currentWord = null;
-
-    function render() {
-      const dueIds = getDueCards();
-      if (dueIds.length === 0) {
-        app.innerHTML = `<div class="empty-message">🎉 太棒了！今天所有单词都已复习完。<br><small>休息一下，明天继续巩固。</small></div>`;
-        return;
-      }
-
-      const wordId = dueIds[0];
-      const wordData = WORDS.find(w => w.id == wordId);
-      if (!wordData) return;
-      currentWord = wordId;
-
-      app.innerHTML = `
-        <div class="card" id="wordCard">
-          <div class="word">${wordData.word}</div>
-          <div class="definition">${wordData.definition}</div>
-          <div class="buttons">
-            <button class="again" onclick="handleRating(1)">😞 忘记了</button>
-            <button class="hard" onclick="handleRating(2)">🤔 困难</button>
-            <button class="good" onclick="handleRating(3)">😊 良好</button>
-            <button class="easy" onclick="handleRating(4)">🤩 简单</button>
-          </div>
-          <div class="tip">👆 先努力回想释义，再点击卡片任意位置查看答案</div>
+    <div class="card">
+        <div class="word" id="word">加载中...</div>
+        <div class="translation" id="translation"></div>
+        <div class="btn-group">
+            <button class="again" onclick="rateCard(1)">Again</button>
+            <button class="hard" onclick="rateCard(2)">Hard</button>
+            <button class="good" onclick="rateCard(3)">Good</button>
+            <button class="easy" onclick="rateCard(4)">Easy</button>
         </div>
-        <div class="stats">
-          今日待复习：<strong>${dueIds.length}</strong> 个词
-        </div>
-      `;
+    </div>
+    <div class="tip" id="tip"></div>
 
-      // 点击卡片区域显示/隐藏释义
-      document.getElementById('wordCard').addEventListener('click', function(e) {
-        if (e.target.tagName === 'BUTTON') return;
-        this.classList.toggle('show-def');
-      });
-    }
+    <!-- 引入 FSRS 算法 -->
+    <script src="fsrs.js"></script>
+    <script>
+        let wordList = [];
+        let currentWord = null;
+        let fsrs = new FSRS();
 
-    // 全局评分函数，与按钮绑定
-    window.handleRating = function(rating) {
-      if (currentWord === null) return;
-      const ratingMap = { 1: FSRS.Rating.Again, 2: FSRS.Rating.Hard, 3: FSRS.Rating.Good, 4: FSRS.Rating.Easy };
-      rateCard(currentWord, ratingMap[rating]);
-      render();
-    };
+        // 从 JSON 加载单词
+        async function loadWords() {
+            const res = await fetch("words.json");
+            wordList = await res.json();
+            initProgress();
+            pickNextCard();
+        }
 
-    // ========== 6. 启动程序 ==========
-    loadCards();
-    if (Object.keys(cards).length < WORDS.length) {
-      initAllCards(); // 如果有新单词没初始化，自动补齐
-    }
-    render();
-  </script>
+        // 初始化/读取本地存储复习进度
+        function initProgress() {
+            if (!localStorage.getItem("fsrs_words_progress")) {
+                const initData = wordList.map(item => ({
+                    id: item.id,
+                    word: item.word,
+                    translation: item.translation,
+                    card: fsrs.createCard()
+                }));
+                localStorage.setItem("fsrs_words_progress", JSON.stringify(initData));
+            }
+        }
+
+        // 获取所有卡片 & 筛选待复习卡片
+        function getReviewCards() {
+            const now = new Date();
+            const allCards = JSON.parse(localStorage.getItem("fsrs_words_progress"));
+            return allCards.filter(item => new Date(item.card.due) <= now);
+        }
+
+        // 挑选下一个复习卡片
+        function pickNextCard() {
+            const reviewList = getReviewCards();
+            const tipDom = document.getElementById("tip");
+            if (reviewList.length === 0) {
+                document.getElementById("word").innerText = "今日复习完成！";
+                document.getElementById("translation").innerText = "";
+                tipDom.innerText = "暂无需要复习的单词";
+                document.querySelector(".btn-group").style.display = "none";
+                return;
+            }
+            document.querySelector(".btn-group").style.display = "flex";
+            currentWord = reviewList[0];
+            document.getElementById("word").innerText = currentWord.word;
+            document.getElementById("translation").innerText = currentWord.translation;
+            tipDom.innerText = `剩余待复习：${reviewList.length}`;
+        }
+
+        // 评分逻辑：调用 FSRS 更新卡片状态
+        function rateCard(rating) {
+            if (!currentWord) return;
+            const now = new Date();
+            // FSRS 更新卡片
+            const [newCard] = fsrs.repeat(currentWord.card, now)[rating - 1];
+            currentWord.card = newCard;
+
+            // 回写到本地存储
+            const allData = JSON.parse(localStorage.getItem("fsrs_words_progress"));
+            const idx = allData.findIndex(d => d.id === currentWord.id);
+            if (idx > -1) allData[idx] = currentWord;
+            localStorage.setItem("fsrs_words_progress", JSON.stringify(allData));
+
+            // 继续下一个
+            pickNextCard();
+        }
+
+        // 启动
+        loadWords();
+    </script>
 </body>
 </html>
