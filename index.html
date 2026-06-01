@@ -32,22 +32,24 @@
     </div>
     <div class="tip" id="tip"></div>
 
-    <!-- 引入 FSRS 算法 -->
     <script src="fsrs.js"></script>
     <script>
         let wordList = [];
         let currentWord = null;
         let fsrs = new FSRS();
 
-        // 从 JSON 加载单词
         async function loadWords() {
-            const res = await fetch("words.json");
-            wordList = await res.json();
-            initProgress();
-            pickNextCard();
+            try {
+                const res = await fetch("words.json");
+                wordList = await res.json();
+                initProgress();
+                pickNextCard();
+            } catch (e) {
+                document.getElementById("word").innerText = "加载单词失败";
+                console.error("加载words.json错误:", e);
+            }
         }
 
-        // 初始化/读取本地存储复习进度
         function initProgress() {
             if (!localStorage.getItem("fsrs_words_progress")) {
                 const initData = wordList.map(item => ({
@@ -60,17 +62,16 @@
             }
         }
 
-        // 获取所有卡片 & 筛选待复习卡片
         function getReviewCards() {
             const now = new Date();
             const allCards = JSON.parse(localStorage.getItem("fsrs_words_progress"));
             return allCards.filter(item => new Date(item.card.due) <= now);
         }
 
-        // 挑选下一个复习卡片
         function pickNextCard() {
             const reviewList = getReviewCards();
             const tipDom = document.getElementById("tip");
+
             if (reviewList.length === 0) {
                 document.getElementById("word").innerText = "今日复习完成！";
                 document.getElementById("translation").innerText = "";
@@ -78,6 +79,7 @@
                 document.querySelector(".btn-group").style.display = "none";
                 return;
             }
+
             document.querySelector(".btn-group").style.display = "flex";
             currentWord = reviewList[0];
             document.getElementById("word").innerText = currentWord.word;
@@ -85,25 +87,22 @@
             tipDom.innerText = `剩余待复习：${reviewList.length}`;
         }
 
-        // 【已修复】评分逻辑
         function rateCard(rating) {
             if (!currentWord) return;
             const now = new Date();
-            const allResults = fsrs.repeat(currentWord.card, now);
-            const [newCard] = allResults[rating - 1];
+            const results = fsrs.repeat(currentWord.card, now);
+            // 修复核心错误：直接取对应卡片，不再解构
+            const newCard = results[rating - 1];
             currentWord.card = newCard;
 
-            // 回写到本地存储
             const allData = JSON.parse(localStorage.getItem("fsrs_words_progress"));
             const idx = allData.findIndex(d => d.id === currentWord.id);
             if (idx > -1) allData[idx] = currentWord;
             localStorage.setItem("fsrs_words_progress", JSON.stringify(allData));
 
-            // 切换下一个单词
             pickNextCard();
         }
 
-        // 启动程序
         loadWords();
     </script>
 </body>
